@@ -6,8 +6,23 @@ async function popupjs() {
         if (debug) console.log(...args);
     };
 
-    // timeoutmsまで非同期的にタスク完了を待つ関数
-    let asyncWait = async (msg, timeoutms, task) => {
+    const sendErr = async (errMsg = "") => {
+        console.log("人気ウォッチャー ＥＲＲＯＲ:", errMsg);
+        await chrome.runtime.sendMessage({
+            to: "background",
+            code: "show",
+            content: "ERR",
+        });
+        return;
+    };
+
+    /**
+     * timeoutmsまで非同期的にタスク完了を待つ関数
+     * @param {string} msg 表示するメッセージ
+     * @param {number} timeoutms 最大待ち時間
+     * @param {function} task 行うタスク
+     */
+    const asyncWait = async (msg, timeoutms, task) => {
         dlog(msg, "start");
         for (let t = 0; t <= timeoutms; t += 200) {
             if (task()) {
@@ -27,15 +42,6 @@ async function popupjs() {
 
     let yt_channel_topview = async () => {
         dlog(location.href);
-        const sendErr = async (errMsg = "") => {
-            console.log("人気ウォッチャー ＥＲＲＯＲ:", errMsg);
-            await chrome.runtime.sendMessage({
-                to: "background",
-                code: "show",
-                content: "ERR",
-            });
-            return;
-        };
 
         if (location.host !== "www.youtube.com") {
             sendErr("Not Youtube Page");
@@ -60,16 +66,17 @@ async function popupjs() {
                     chTab.click();
                 }
             }
-            await new Promise((ok) => setTimeout(ok, 200));
         }
 
         const selectorForVideoMeta =
             "div#content.ytd-rich-item-renderer div#meta a#video-title-link";
 
         // 並び替え前のビデオメタ情報取得
-        const videos0 = document.querySelectorAll(selectorForVideoMeta);
-        // ビデオが一つもないなら終了
-        if (videos0 == null) return;
+        let videos0;
+        await asyncWait("初期状態の動画リスト取得", 5000, () => {
+            videos0 = document.querySelectorAll(selectorForVideoMeta);
+            return !!videos0.length;
+        });
         const chk0 = videos0[0].getAttribute("href");
 
         const selectorTitle = (text) =>
@@ -94,7 +101,7 @@ async function popupjs() {
 
             // 現在のビデオの一番目が最初と同じままなら
             // 並び替えが終わるまで待つ。
-            await asyncWait("sort", 10000, () => {
+            await asyncWait("sort", 5000, () => {
                 const curChk = document
                     .querySelector(selectorForVideoMeta)
                     .getAttribute("href");
@@ -177,7 +184,7 @@ async function popupjs() {
                 "div#additional-info-container table.ytd-about-channel-renderer"
             );
 
-        await asyncWait("find ch about", 10000, getChAbout);
+        await asyncWait("find ch about", 5000, getChAbout);
         const chAbout = getChAbout();
 
         // カスタムＵＲＬおよびChannel ID 取得
