@@ -2,7 +2,7 @@
     "manifest_version": 3,
     "name": "人気ウォッチャー",
     "description": "www.youtube.com/@~~~~/videos の形式のYoutubeページにて、チャンネル情報と最古、人気順トップの動画情報を取得しTAB区切りcsvの形でクリップボードにコピー",
-    "version": "0.2.0",
+    "version": "0.2.1",
 
     "action": {
         "default_title": "人気ウォッチャー"

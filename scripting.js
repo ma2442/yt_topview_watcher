@@ -1,11 +1,6 @@
 "use strict";
 
-var done = false;
-
 async function popupjs() {
-    if (done) return;
-    done = true;
-
     let debug = true;
     let dlog = function (...args) {
         if (debug) console.log(...args);
@@ -22,83 +17,9 @@ async function popupjs() {
             dlog(msg, ": in progress,", t, "msec");
             await new Promise((ok) => setTimeout(ok, 200));
         }
-        dlog(msg, ": T I M E O U T !");
-        await chrome.runtime.sendMessage({
-            to: "background",
-            code: "show",
-            content: "ERR",
-        });
+        sendErr(msg + ": T I M E O U T !");
     };
 
-    //////////////////////////////////////////////////////////////////
-    // youtube Data API v3 を用いてCh概要を取得する関数
-    // manifestに要 "permissions": ["storage"]
-    //////////////////////////////////////////////////////////////////
-    const fetchChannelAbout = async (chId) => {
-        //////////////////////////////////////////////////////////////////
-        // youtube Data API v3 を用いてjson情報を取得する関数
-        //////////////////////////////////////////////////////////////////
-        let fetchYtJson = async (req) => {
-            console.log(`fetch youtube json from ${req}`);
-            const options = {
-                method: "GET",
-                body: null,
-            };
-            let response = await fetch(req, options);
-            dlog("status:", response.status);
-            let json = await response.json();
-            // console.log(`result: \n${JSON.stringify(json, null, "  ")}`);
-            return json;
-        };
-
-        //////////////////////////////////////////////////////////////////
-        // 与えられたカスタムURL
-        // (チャンネルページで@から始まるチャンネルの識別文字列)
-        // を youtube data api に渡してチャネル情報取得
-        //////////////////////////////////////////////////////////////////
-        let fetchChannelInfo = async (chId) => {
-            const API_KEY = "";
-            if (API_KEY == "") {
-                for (let i = 0; i < 50; i++) {
-                    console.log("A P I   K E Y   I S   E M P T Y   !!!  ", i);
-                }
-                return;
-            }
-            let url = new URL("https://youtube.googleapis.com");
-            url.pathname = "/youtube/v3/channels";
-            url.search = new URLSearchParams({
-                part: [
-                    "snippet",
-                    "contentDetails",
-                    "statistics",
-                    "brandingSettings",
-                ].join(","),
-                id: chId,
-                key: API_KEY,
-            });
-
-            const ytJson = await fetchYtJson(url.href);
-            // dlog(ytJson);
-            await chrome.storage.local.set({ ytJson: ytJson });
-        };
-        await fetchChannelInfo(chId);
-        let { ytJson } = await chrome.storage.local.get("ytJson");
-        dlog("ytJson:");
-        dlog(ytJson);
-
-        const { snippet, id, statistics } = ytJson.items[0];
-        const { publishedAt, title, thumbnails, customUrl } = snippet;
-        const { viewCount, subscriberCount, videoCount } = statistics;
-
-        return {
-            viewCount: viewCount,
-            subscriberCount: subscriberCount,
-            videoCount: videoCount,
-            publishedAt: publishedAt,
-            title: title,
-            customUrl: customUrl,
-        };
-    };
     ////////////////////////////////////////////////////////////////////////////
     ////////////////////////////////////////////////////////////////////////////
 
@@ -106,16 +27,40 @@ async function popupjs() {
 
     let yt_channel_topview = async () => {
         dlog(location.href);
-        if (
-            location.host !== "www.youtube.com" ||
-            !location.pathname.endsWith("/videos")
-        ) {
+        const sendErr = async (errMsg = "") => {
+            console.log("人気ウォッチャー ＥＲＲＯＲ:", errMsg);
             await chrome.runtime.sendMessage({
                 to: "background",
                 code: "show",
                 content: "ERR",
             });
             return;
+        };
+
+        if (location.host !== "www.youtube.com") {
+            sendErr("Not Youtube Page");
+            return;
+        }
+
+        // チャンネルページ内で動画タブ以外を開いているとき
+        // 動画タブをクリック
+        const chTabSelected = document.querySelector(
+            ".yt-tab-shape-wiz__tab--tab-selected"
+        );
+        if (!chTabSelected) {
+            sendErr("tabs in ch page is not found");
+            return;
+        }
+        dlog("tabselected is found");
+        if (chTabSelected.textContent != "動画") {
+            dlog("tabselected is not 動画");
+            const chTabs = document.querySelectorAll(".yt-tab-shape-wiz__tab");
+            for (const chTab of chTabs) {
+                if (chTab.textContent == "動画") {
+                    chTab.click();
+                }
+            }
+            await new Promise((ok) => setTimeout(ok, 200));
         }
 
         const selectorForVideoMeta =
@@ -218,30 +163,48 @@ async function popupjs() {
             genVideoInfo(video, `Top${i + 1}`)
         );
 
-        // チャネル概要から情報取得 （概要DOMが生成されてなければ概要を開いてから）
+        // 概要DOMを生成（チャンネル概要を開いて閉じることで）
+        const chAboutBtn = document.querySelector(
+            "div#content.ytd-channel-tagline-renderer"
+        );
+        chAboutBtn.click();
+        await new Promise((ok) => setTimeout(ok, 200));
+        chAboutBtn.click();
+
+        // チャンネル概要から情報取得
         const getChAbout = () =>
             document.querySelector(
                 "div#additional-info-container table.ytd-about-channel-renderer"
             );
 
-        if (!getChAbout())
-            document
-                .querySelector("div#content.ytd-channel-tagline-renderer")
-                .click();
-
         await asyncWait("find ch about", 10000, getChAbout);
         const chAbout = getChAbout();
-        // dlog(chAbout.innerHTML);
+
+        // カスタムＵＲＬおよびChannel ID 取得
+
+        // channelIDを取得する関数(チャンネルページで)
+        // vidIdのエクステンションが原因か、DOM構造でchIdのありかが変わる。
+        const getChId = () => {
+            let que = 'link[href*="youtube.com/channel/"]';
+            let chIdHolder = document.querySelector(que);
+            if (chIdHolder) return chIdHolder.href.split("/").splice(-1)[0];
+
+            que = '[href^="/channel/"][href$="/about"]';
+            chIdHolder = document.querySelector(que);
+            if (chIdHolder) return chIdHolder.href.split("/").splice(-2)[0];
+
+            sendErr("chIdHolder is not found!");
+            return undefined;
+        };
 
         const customUrl = document.querySelector(
             "yt-formatted-string#channel-handle"
         ).textContent;
 
-        const chId = new URL(
-            document.querySelector('link[title="RSS"]').href
-        ).searchParams.get("channel_id");
+        if (!customUrl) sendErr("customUrl is not found!");
 
-        dlog(customUrl, chId);
+        const chId = getChId();
+        dlog("customUrl, chId:", customUrl);
 
         const { subscriberCount, videoCount, viewCount, publishedAt } = [
             ...chAbout.querySelectorAll("tr>td:nth-child(2)"),
@@ -256,7 +219,6 @@ async function popupjs() {
                 publishedAt: acc?.publishedAt ?? str.match(/(.+)に登録/)?.[1],
             };
         }, {});
-        // let { viewCount } = await fetchChannelAbout(chId);
         dlog(subscriberCount, videoCount, viewCount, publishedAt);
 
         const title = document
@@ -265,10 +227,10 @@ async function popupjs() {
 
         const chInfo = [
             "ch",
-            "https://www.youtube.com/" + customUrl + "/videos",
             title,
             subscriberCount,
             viewCount,
+            "https://www.youtube.com/" + customUrl + "/videos",
             videoCount,
             publishedAt,
             chId,
