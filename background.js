@@ -33,16 +33,19 @@ async function backgroundjs() {
         });
     });
 
-    chrome.runtime.onMessage.addListener(async ({ to, code, content }) => {
-        if (to === "background" && code === "show") {
-            await chrome.action.setBadgeText({ text: content });
-            await chrome.action.setBadgeBackgroundColor({
-                color: content === "ERR" ? "red" : "green",
-            });
-            await new Promise((ok) => setTimeout(ok, 5000));
-            await chrome.action.setBadgeText({ text: "" });
+    chrome.runtime.onMessage.addListener(
+        async ({ to, code, content, bgcolor }) => {
+            if (to === "background" && code === "show") {
+                await chrome.action.setBadgeText({ text: content });
+                await chrome.action.setBadgeBackgroundColor({
+                    color: bgcolor,
+                });
+
+                await new Promise((ok) => setTimeout(ok, 10000));
+                await chrome.action.setBadgeText({ text: "" });
+            }
         }
-    });
+    );
 }
 
 backgroundjs();
