@@ -34,6 +34,7 @@ async function popupjs() {
             await new Promise((ok) => setTimeout(ok, 200));
         }
         sendErr(msg + ": T I M E O U T !");
+        return false;
     };
 
     // ビデオ情報抽出ヘルパー 見つかったキャプチャグループの１つ目をとらえる
@@ -147,10 +148,15 @@ async function popupjs() {
 
         // 並び替え前のビデオメタ情報取得
         let videos0;
-        await asyncWait("初期状態の動画リスト取得", 5000, () => {
-            videos0 = document.querySelectorAll(selectorForVideoMeta);
-            return !!videos0.length;
-        });
+        let isTaskCompleted = await asyncWait(
+            "初期状態の動画リスト取得",
+            5000,
+            () => {
+                videos0 = document.querySelectorAll(selectorForVideoMeta);
+                return !!videos0.length;
+            }
+        );
+        if (!isTaskCompleted) return;
 
         dlog("並び替え前 video0.length:", videos0.length);
         const chk0 = videos0[0].getAttribute("href");
@@ -230,8 +236,9 @@ async function popupjs() {
             // 指定したラベルのソートボタンをクリックして並び替えを待つ関数
             // prevChk が現在値と変わっていたら並び替え終了
             const sortBy = async (text, prevChk) => {
-                if (isSelected(text)) return;
-                if (videos0.length == 1) return;
+                dlog("isSelected:", isSelected(text));
+                if (isSelected(text)) return true;
+                if (videos0.length <= 1) return true;
 
                 // ビデオが複数で人気順になっていなければ並び替えを実行
                 await document.querySelector(selectorTitle(text)).click();
@@ -239,7 +246,7 @@ async function popupjs() {
 
                 // 現在のビデオの一番目が最初と同じままなら
                 // 並び替えが終わるまで待つ。
-                await asyncWait("sort", 5000, () => {
+                return await asyncWait("sort", 5000, () => {
                     const curChk = document
                         .querySelector(selectorForVideoMeta)
                         .getAttribute("href");
@@ -248,12 +255,12 @@ async function popupjs() {
                 });
             };
 
-            await sortBy("古い順", chk0);
+            if (!(await sortBy("古い順", chk0))) return;
             videoOldest = document.querySelector(selectorForVideoMeta);
             const chkOldest = videoOldest.getAttribute("href");
             videoOldestInfo = genVideoInfoRow(videoOldest, "最古");
 
-            await sortBy("人気の動画", chkOldest);
+            if (!(await sortBy("人気の動画", chkOldest))) return;
 
             // ビデオトップ５の情報を取得
             videoTop5 = [
