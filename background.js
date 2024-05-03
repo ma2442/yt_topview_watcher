@@ -41,7 +41,7 @@ async function backgroundjs() {
                     color: bgcolor,
                 });
 
-                await new Promise((ok) => setTimeout(ok, 10000));
+                await new Promise((ok) => setTimeout(ok, 30000));
                 await chrome.action.setBadgeText({ text: "" });
             }
         }

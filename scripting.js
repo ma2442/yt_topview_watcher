@@ -267,18 +267,22 @@ async function popupjs() {
                 ...document.querySelectorAll(selectorForVideoMeta),
             ].slice(0, 5);
 
-            dlog(videoTop5.length);
+            dlog("videoTop5.length:", videoTop5.length);
             videoTop5Info = videoTop5.map((video, i) =>
                 genVideoInfoRow(video, `Top${i + 1}`)
             );
         }
 
         // 概要DOMを生成（チャンネル概要を開いて閉じることで）
+        dlog("finding 'さらに表示' ボタン...");
         const chAboutBtn = document.querySelector(
-            "div#content.ytd-channel-tagline-renderer"
+            "button.truncated-text-wiz__absolute-button"
+            // "div#content.ytd-channel-tagline-renderer"
         );
+        dlog("opening 'ch about'...");
         chAboutBtn.click();
         await new Promise((ok) => setTimeout(ok, 200));
+        dlog("closing 'ch about'...");
         chAboutBtn.click();
 
         // チャンネル概要から情報取得
@@ -295,8 +299,10 @@ async function popupjs() {
         // channelIDを取得する関数(チャンネルページで)
         // vidIdのエクステンションが原因か、DOM構造でchIdのありかが変わる。
         const getChId = () => {
+            dlog("getting ch id...");
             let que = 'link[href*="youtube.com/channel/"]';
             let chIdHolder = document.querySelector(que);
+            dlog("chIdHolder.href", chIdHolder.href);
             if (chIdHolder) return chIdHolder.href.split("/").splice(-1)[0];
 
             que = '[href^="/channel/"][href$="/about"]';
@@ -307,14 +313,16 @@ async function popupjs() {
             return undefined;
         };
 
-        const customUrl = document.querySelector(
-            "yt-formatted-string#channel-handle"
-        ).textContent;
+        dlog("finding custom url...");
+        const customUrl = [
+            ...document.querySelectorAll(".yt-core-attributed-string"),
+        ].filter((dom) => dom.textContent.startsWith("@"))[0].textContent;
+        dlog("customUrl:", customUrl);
 
         if (!customUrl) sendErr("customUrl is not found!");
 
         const chId = getChId();
-        dlog("customUrl, chId:", customUrl);
+        dlog("chId:", chId);
 
         const { subscriberCount, videoCount, viewCount, publishedAt } = [
             ...chAbout.querySelectorAll("tr>td:nth-child(2)"),
