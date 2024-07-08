@@ -339,10 +339,13 @@ async function popupjs() {
         }, {});
         dlog(subscriberCount, videoCount, viewCount, publishedAt);
 
-        const title = document
-            .querySelector("yt-formatted-string#text.ytd-channel-name")
-            .textContent.trim();
-
+        const title =
+            document
+                .querySelector("yt-dynamic-text-view-model [role='text']")
+                .textContent.trim() ||
+            document
+                .querySelector("yt-formatted-string#text.ytd-channel-name")
+                .textContent.trim();
         const chInfo = [
             "ch",
             title,
